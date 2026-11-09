@@ -1,0 +1,144 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Fashion catalog item with variants, real prices in XAF and stock",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "titleFr": { "type": "string", "maxLength": 200 },
+        "titleEn": { "type": "string", "maxLength": 200 },
+        "descriptionFr": { "type": "string", "maxLength": 4000 },
+        "descriptionEn": { "type": "string", "maxLength": 4000 },
+        "category": { "type": "string", "enum": ["men", "women", "shoes", "watches", "perfumes", "accessories"] },
+        "gender": { "type": "string", "enum": ["men", "women", "unisex"] },
+        "price": { "type": "number" },
+        "costPrice": { "type": "number" },
+        "compareAtPrice": { "type": "number" },
+        "images": { "type": "array" },
+        "variants": { "type": "array" },
+        "brand": { "type": "string", "maxLength": 100 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "titleFr", "category", "price"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order with Cameroon location, merchant code payment, courier assignment, photo proof of delivery and signature",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 50 },
+        "customerName": { "type": "string", "maxLength": 150 },
+        "customerPhone": { "type": "string", "maxLength": 25 },
+        "city": { "type": "string", "maxLength": 100 },
+        "quartier": { "type": "string", "maxLength": 150 },
+        "landmark": { "type": "string", "maxLength": 300 },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "deliveryFee": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["om", "momo", "cod"] },
+        "merchantCode": { "type": "string", "maxLength": 50 },
+        "transactionRef": { "type": "string", "maxLength": 100 },
+        "paymentStatus": { "type": "string", "enum": ["pending", "paid", "refunded"] },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "processing", "in_transit", "delivered", "cancelled"] },
+        "assignedAgentId": { "type": "string", "maxLength": 128 },
+        "assignedAgentName": { "type": "string", "maxLength": 150 },
+        "assignedAgentPhone": { "type": "string", "maxLength": 25 },
+        "deliveryProofImage": { "type": "string" },
+        "clientSignature": { "type": "string" },
+        "deliveredAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderNumber", "customerName", "customerPhone", "city", "quartier", "items", "total", "status"]
+    },
+    "Courier": {
+      "title": "Courier",
+      "description": "Delivery courier accounts with phone, 4-digit PIN, city sector and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 25 },
+        "pin": { "type": "string", "maxLength": 10 },
+        "city": { "type": "string", "maxLength": 100 },
+        "vehicle": { "type": "string", "maxLength": 100 },
+        "active": { "type": "boolean" },
+        "currentCashCollected": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "phone", "pin", "city"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Accounting operational expense in XAF",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "amount": { "type": "number" },
+        "category": { "type": "string", "enum": ["rent", "salaries", "marketing", "supplies", "logistics", "other"] },
+        "date": { "type": "string" },
+        "recordedBy": { "type": "string", "maxLength": 150 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "amount", "category"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable security and accounting audit log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "maxLength": 50 },
+        "details": { "type": "string", "maxLength": 500 },
+        "userOrAgent": { "type": "string", "maxLength": 150 },
+        "severity": { "type": "string", "enum": ["info", "warning", "success", "danger"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "action", "details", "timestamp"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "System settings including transferable admin credentials and merchant codes",
+      "type": "object",
+      "properties": {
+        "adminEmail": { "type": "string", "maxLength": 150 },
+        "adminPassword": { "type": "string", "maxLength": 150 },
+        "momoMerchantCode": { "type": "string", "maxLength": 50 },
+        "omMerchantCode": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": { "$ref": "Product" },
+      "description": "Real luxury fashion products"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "Order" },
+      "description": "Real orders placed by customers"
+    },
+    "/couriers/{courierId}": {
+      "schema": { "$ref": "Courier" },
+      "description": "Delivery agents created and assigned by Admin"
+    },
+    "/expenses/{expenseId}": {
+      "schema": { "$ref": "Expense" },
+      "description": "Real accounting operational expenses"
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "AuditLog" },
+      "description": "System events and financial traceability"
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "Setting" },
+      "description": "System configuration and transferable admin credentials"
+    }
+  }
+}

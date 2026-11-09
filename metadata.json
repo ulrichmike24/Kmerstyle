@@ -1,0 +1,6 @@
+{
+  "name": "KamerChic - Mode & Luxe Cameroun",
+  "description": "Boutique en ligne haut de gamme pour le Cameroun : Prêt-à-porter hommes & femmes, chaussures, montres, parfums et accessoires. Paiement MTN & Orange Money.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
