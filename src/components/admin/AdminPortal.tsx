@@ -37,6 +37,9 @@ import {
   Camera,
   Eye,
   Smartphone,
+  Crown,
+  Award,
+  UserCheck,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import {
@@ -50,6 +53,9 @@ import {
   DeliveryAgent,
   ExpenseItem,
   ExpenseCategory,
+  LoyaltyMember,
+  WhitelistEntry,
+  WhitelistVipLevel,
 } from '../../types';
 import { formatXAF, formatDate } from '../../lib/formatters';
 
@@ -81,11 +87,35 @@ export const AdminPortal: React.FC = () => {
     adminLogout,
     setActivePortal,
     language,
+    shippingRates,
+    updateShippingRate,
+    loyaltyMembers,
+    whitelist,
+    addOrUpdateLoyaltyPoints,
+    addWhitelistEntry,
+    deleteWhitelistEntry,
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'inventory' | 'accounting' | 'products' | 'orders' | 'couriers' | 'coupons' | 'zones' | 'ai-copywriter'
+    'dashboard' | 'inventory' | 'accounting' | 'products' | 'orders' | 'couriers' | 'coupons' | 'zones' | 'fidelite' | 'whitelist' | 'ai-copywriter'
   >('dashboard');
+
+  // Loyalty & Whitelist States
+  const [loyaltySearch, setLoyaltySearch] = useState('');
+  const [whitelistSearch, setWhitelistSearch] = useState('');
+  const [isWhitelistModalOpen, setIsWhitelistModalOpen] = useState(false);
+  const [wlName, setWlName] = useState('');
+  const [wlPhone, setWlPhone] = useState('+237 6');
+  const [wlEmail, setWlEmail] = useState('');
+  const [wlVipLevel, setWlVipLevel] = useState<WhitelistVipLevel>('vip');
+  const [wlDiscountPercent, setWlDiscountPercent] = useState<number>(10);
+  const [wlFreeDelivery, setWlFreeDelivery] = useState(true);
+  const [wlNotes, setWlNotes] = useState('');
+
+  // Manual Bonus Points State
+  const [bonusMember, setBonusMember] = useState<LoyaltyMember | null>(null);
+  const [bonusPoints, setBonusPoints] = useState<number>(50);
+  const [bonusReason, setBonusReason] = useState('Geste commercial & fidélité VIP');
 
   // Product CRUD states
   const [productSearch, setProductSearch] = useState('');
@@ -265,21 +295,41 @@ export const AdminPortal: React.FC = () => {
     setIsProductModalOpen(true);
   };
 
-  const handleGenerateAiDescription = () => {
+  const handleGenerateAiDescription = async () => {
     if (!formTitleFr) {
       alert('Veuillez d’abord saisir le nom du produit.');
       return;
     }
     setIsGeneratingAi(true);
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/ai/generate-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formTitleFr,
+          category: formCategory,
+          gender: formGender,
+          fabric: formFabric,
+          price: formPrice,
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.descriptionFr) setFormDescFr(data.descriptionFr);
+        if (data.descriptionEn) setFormDescEn(data.descriptionEn);
+      } else {
+        throw new Error('API server error');
+      }
+    } catch {
       setFormDescFr(
-        `Une création remarquable issue du savoir-faire artisanal KamerChic. Confectionnée dans des matières nobles pour sublimer votre prestance lors des grands mariages, réceptions et galas à Douala et Yaoundé. Finitions main soignées, tombé royal et tissu respirant adapté au climat tropical.`
+        `Une création remarquable issue du savoir-faire artisanal KamerChic : "${formTitleFr}". Confectionnée dans des matières nobles (${formFabric || 'tissu de confection noble'}) pour sublimer votre prestance lors des grands mariages, réceptions et galas à Douala et Yaoundé. Finitions main soignées, tombé royal et tissu respirant adapté au climat tropical.`
       );
       setFormDescEn(
-        `A distinguished luxury creation from KamerChic. Tailored from prestigious textiles to elevate your appearance at weddings, galas, and stately celebrations in Cameroon. Handcrafted finish and breathable comfort designed for tropical climates.`
+        `A distinguished luxury creation from KamerChic: "${formTitleFr}". Tailored from prestigious textiles (${formFabric || 'exceptional fabrics'}) to elevate your appearance at weddings, galas, and stately celebrations in Cameroon. Handcrafted finish and breathable comfort designed for tropical climates.`
       );
+    } finally {
       setIsGeneratingAi(false);
-    }, 700);
+    }
   };
 
   const handleSaveProduct = (e: React.FormEvent) => {
@@ -393,10 +443,69 @@ export const AdminPortal: React.FC = () => {
     if (!assigningCourierOrder) return;
     const agent = couriers.find((c) => c.id === selectedCourierId) || couriers[0];
     if (agent) {
-      assignOrderCourier(assigningCourierOrder.id, agent.name, agent.phone);
+      assignOrderCourier(assigningCourierOrder.id, agent.id, agent.name, agent.phone);
     }
     setAssigningCourierOrder(null);
   };
+
+  const handleAddWhitelistSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wlName.trim() || !wlPhone.trim()) return;
+
+    const newVip: WhitelistEntry = {
+      id: `wl-${Date.now()}`,
+      name: wlName.trim(),
+      phone: wlPhone.trim(),
+      email: wlEmail.trim() || undefined,
+      vipLevel: wlVipLevel,
+      discountPercent: wlDiscountPercent,
+      freeDeliveryAllRegions: wlFreeDelivery,
+      notes: wlNotes.trim() || undefined,
+      addedAt: new Date().toISOString(),
+      isActive: true,
+    };
+    addWhitelistEntry(newVip);
+    setWlName('');
+    setWlPhone('+237 6');
+    setWlEmail('');
+    setWlNotes('');
+    setIsWhitelistModalOpen(false);
+  };
+
+  const handleApplyBonusPoints = () => {
+    if (!bonusMember || bonusPoints <= 0) return;
+    addOrUpdateLoyaltyPoints(
+      bonusMember.phone,
+      bonusMember.name,
+      bonusPoints,
+      0
+    );
+    setBonusMember(null);
+    setBonusPoints(50);
+  };
+
+  const filteredLoyaltyMembers = useMemo(() => {
+    return loyaltyMembers.filter((m) => {
+      const q = loyaltySearch.toLowerCase();
+      return (
+        m.name.toLowerCase().includes(q) ||
+        m.phone.toLowerCase().includes(q) ||
+        m.tier.toLowerCase().includes(q)
+      );
+    });
+  }, [loyaltyMembers, loyaltySearch]);
+
+  const filteredWhitelist = useMemo(() => {
+    return whitelist.filter((w) => {
+      const q = whitelistSearch.toLowerCase();
+      return (
+        w.name.toLowerCase().includes(q) ||
+        w.phone.toLowerCase().includes(q) ||
+        (w.email && w.email.toLowerCase().includes(q)) ||
+        w.vipLevel.toLowerCase().includes(q)
+      );
+    });
+  }, [whitelist, whitelistSearch]);
 
   // CSV Exports
   const handleExportAccountingCsv = () => {
@@ -424,9 +533,18 @@ export const AdminPortal: React.FC = () => {
           <button
             onClick={() => setActivePortal('client')}
             className="flex items-center gap-1.5 text-xs text-stone-300 hover:text-white bg-stone-800 hover:bg-stone-700 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+            title="Aperçu de la Boutique Client"
           >
             <ArrowLeft size={14} />
             <span className="hidden sm:inline">Boutique Client</span>
+          </button>
+          <button
+            onClick={() => setActivePortal('delivery')}
+            className="flex items-center gap-1.5 text-xs text-amber-200 hover:text-white bg-amber-950/70 hover:bg-amber-900 border border-amber-700/60 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+            title="Accéder au Portail des Livreurs"
+          >
+            <Truck size={14} className="text-amber-400" />
+            <span className="hidden sm:inline">Portail Livreurs</span>
           </button>
           <div className="h-4 w-px bg-stone-700 hidden sm:block" />
           <div className="flex items-center gap-2">
@@ -562,6 +680,35 @@ export const AdminPortal: React.FC = () => {
           >
             <Truck size={17} className={activeTab === 'zones' ? 'text-amber-400' : 'text-stone-500'} />
             <span>Zones de Livraison</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('fidelite')}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
+              activeTab === 'fidelite' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-700 hover:bg-stone-100'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Crown size={17} className={activeTab === 'fidelite' ? 'text-amber-400' : 'text-stone-500'} />
+              <span>Club Prestige (Fidélité)</span>
+            </div>
+            <span className="bg-amber-100 text-amber-900 text-[10px] px-2 py-0.5 rounded-full font-bold">
+              {loyaltyMembers.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('whitelist')}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-left ${
+              activeTab === 'whitelist' ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-700 hover:bg-stone-100'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <UserCheck size={17} className={activeTab === 'whitelist' ? 'text-amber-400' : 'text-stone-500'} />
+              <span>Liste Blanche VIP</span>
+            </div>
+            <span className="bg-emerald-100 text-emerald-900 text-[10px] px-2 py-0.5 rounded-full font-bold">
+              {whitelist.length}
+            </span>
           </button>
 
           <button
@@ -1193,23 +1340,48 @@ export const AdminPortal: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 8: ZONES */}
+          {/* TAB 8: ZONES / SHIPPING RATES */}
           {activeTab === 'zones' && (
             <div className="space-y-6">
-              <h1 className="font-serif text-2xl font-bold text-stone-900">Frais de Livraison</h1>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {deliveryZones.map((z) => (
-                  <div key={z.id} className="bg-white rounded-2xl p-5 border border-stone-200 space-y-2 text-xs">
-                    <h3 className="font-bold text-sm">{z.name.fr}</h3>
-                    <p className="text-stone-500">{z.estimatedHours.fr}</p>
-                    <div className="flex items-center gap-2 pt-2">
-                      <input
-                        type="number"
-                        value={z.fee}
-                        onChange={(e) => updateDeliveryZoneFee(z.id, Number(e.target.value))}
-                        className="bg-stone-50 border border-stone-200 rounded-lg p-2 font-mono font-bold w-full"
-                      />
-                      <span>FCFA</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="font-serif text-2xl font-bold text-stone-900">Tarifs de Livraison par Ville (Firestore)</h1>
+                  <p className="text-xs text-stone-600 mt-1">
+                    Grille tarifaire dynamique synchronisée en direct avec la collection <code className="bg-stone-200 px-1 py-0.5 rounded text-amber-900 font-mono">shipping_rates</code>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {shippingRates.map((rate) => (
+                  <div key={rate.id} className="bg-white rounded-2xl p-5 border border-stone-200 shadow-sm space-y-3 text-xs">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-bold text-sm text-stone-900">{rate.town}</h3>
+                        <p className="text-[11px] text-stone-500 font-medium">{rate.region}</p>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200 font-mono">
+                        {rate.id}
+                      </span>
+                    </div>
+
+                    <p className="text-stone-600 text-[11px]">
+                      ⏱️ {rate.deliveryTime?.fr || 'Livraison standard'}
+                    </p>
+
+                    <div className="pt-2 border-t border-stone-100">
+                      <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                        Frais appliqués au panier (XAF)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={rate.fee}
+                          onChange={(e) => updateShippingRate({ ...rate, fee: Number(e.target.value) })}
+                          className="bg-stone-50 border border-stone-200 rounded-lg p-2 font-mono font-bold w-full text-stone-900 focus:outline-none focus:border-amber-700"
+                        />
+                        <span className="font-bold text-stone-600 shrink-0">FCFA</span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1235,6 +1407,311 @@ export const AdminPortal: React.FC = () => {
               >
                 {isGeneratingAi ? 'Génération...' : 'Tester le Générateur IA'}
               </button>
+            </div>
+          {/* TAB: CLUB PRESTIGE FIDELITE */}
+          {activeTab === 'fidelite' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h1 className="font-serif text-2xl sm:text-3xl font-extrabold text-stone-900 flex items-center gap-2.5">
+                    <Crown size={28} className="text-amber-600 fill-amber-500/20" />
+                    <span>Club Prestige & Fidélité Clients</span>
+                  </h1>
+                  <p className="text-xs text-stone-500">
+                    Gestion des points fidélité (1 pt par 1 000 FCFA), passages de rangs et attributions de bonus exclusifs.
+                  </p>
+                </div>
+              </div>
+
+              {/* KPI Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">
+                    Membres Inscrits
+                  </span>
+                  <span className="text-2xl font-mono font-black text-stone-900 mt-1 block">
+                    {loyaltyMembers.length}
+                  </span>
+                  <span className="text-[11px] text-stone-500">Clients fidélisés</span>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">
+                    Points en Circulation
+                  </span>
+                  <span className="text-2xl font-mono font-black text-amber-800 mt-1 block">
+                    {loyaltyMembers.reduce((sum, m) => sum + (m.points || 0), 0)}
+                  </span>
+                  <span className="text-[11px] text-amber-900 font-medium">Accumulés par les clients</span>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">
+                    Membres Or & Platine VIP
+                  </span>
+                  <span className="text-2xl font-mono font-black text-purple-900 mt-1 block">
+                    {loyaltyMembers.filter((m) => m.tier === 'platine' || m.tier === 'or').length}
+                  </span>
+                  <span className="text-[11px] text-purple-800 font-medium">Haut prestige</span>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">
+                    Dépenses Cumulées
+                  </span>
+                  <span className="text-xl sm:text-2xl font-mono font-black text-emerald-800 mt-1 block">
+                    {formatXAF(loyaltyMembers.reduce((sum, m) => sum + (m.totalSpent || 0), 0))}
+                  </span>
+                  <span className="text-[11px] text-emerald-700 font-medium">Volume généré</span>
+                </div>
+              </div>
+
+              {/* Members Table */}
+              <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-stone-100 flex flex-col sm:flex-row gap-3 justify-between items-center">
+                  <div className="relative w-full sm:w-72">
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                    <input
+                      type="text"
+                      placeholder="Rechercher par nom, téléphone, rang..."
+                      value={loyaltySearch}
+                      onChange={(e) => setLoyaltySearch(e.target.value)}
+                      className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-amber-700"
+                    />
+                  </div>
+                  <span className="text-xs text-stone-500 font-semibold">
+                    {filteredLoyaltyMembers.length} membre{filteredLoyaltyMembers.length > 1 ? 's' : ''} trouvé{filteredLoyaltyMembers.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-stone-50 border-b border-stone-200 text-stone-600 font-bold uppercase tracking-wider">
+                      <tr>
+                        <th className="p-3.5">Client</th>
+                        <th className="p-3.5">Rang VIP</th>
+                        <th className="p-3.5">Points Disponibles</th>
+                        <th className="p-3.5">Commandes</th>
+                        <th className="p-3.5">Total Dépensé</th>
+                        <th className="p-3.5 text-right">Actions Direction</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100 font-medium text-stone-800">
+                      {filteredLoyaltyMembers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-stone-500">
+                            Aucun membre Club Prestige enregistré. Les clients reçoivent automatiquement leurs points dès leur première commande livrée !
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredLoyaltyMembers.map((m) => {
+                          const tierColors: Record<string, string> = {
+                            platine: 'bg-purple-100 text-purple-900 border-purple-300',
+                            or: 'bg-amber-100 text-amber-900 border-amber-300',
+                            argent: 'bg-slate-200 text-slate-800 border-slate-300',
+                            bronze: 'bg-orange-100 text-orange-900 border-orange-300',
+                          };
+                          return (
+                            <tr key={m.id} className="hover:bg-stone-50/80 transition-colors">
+                              <td className="p-3.5">
+                                <div className="font-bold text-stone-900">{m.name}</div>
+                                <div className="text-[11px] text-stone-500 font-mono">{m.phone}</div>
+                                {m.email && <div className="text-[10px] text-stone-400">{m.email}</div>}
+                              </td>
+                              <td className="p-3.5">
+                                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border shadow-2xs ${tierColors[m.tier] || tierColors.bronze}`}>
+                                  {m.tier}
+                                </span>
+                              </td>
+                              <td className="p-3.5">
+                                <span className="font-mono font-black text-amber-800 text-sm">
+                                  {m.points} pts
+                                </span>
+                              </td>
+                              <td className="p-3.5 font-mono">{m.ordersCount}</td>
+                              <td className="p-3.5 font-mono font-bold text-emerald-800">
+                                {formatXAF(m.totalSpent)}
+                              </td>
+                              <td className="p-3.5 text-right">
+                                <button
+                                  onClick={() => {
+                                    setBonusMember(m);
+                                    setBonusPoints(50);
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[11px] transition-colors"
+                                >
+                                  + Bonus Points
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: LISTE BLANCHE VIP */}
+          {activeTab === 'whitelist' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h1 className="font-serif text-2xl sm:text-3xl font-extrabold text-stone-900 flex items-center gap-2.5">
+                    <UserCheck size={28} className="text-emerald-700" />
+                    <span>Liste Blanche VIP (Whitelist Privilège)</span>
+                  </h1>
+                  <p className="text-xs text-stone-500">
+                    Les clients inscrits sur la Liste Blanche bénéficient automatiquement de la livraison offerte dans toutes les régions (0 FCFA) et d'un rabais exclusif en caisse.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setWlName('');
+                    setWlPhone('+237 6');
+                    setWlEmail('');
+                    setWlVipLevel('vip');
+                    setWlDiscountPercent(10);
+                    setWlFreeDelivery(true);
+                    setWlNotes('');
+                    setIsWhitelistModalOpen(true);
+                  }}
+                  className="flex items-center gap-2 bg-stone-900 hover:bg-stone-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 shrink-0"
+                >
+                  <Plus size={15} />
+                  <span>Ajouter un Client VIP</span>
+                </button>
+              </div>
+
+              {/* KPI Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">
+                    Clients Privilégiés
+                  </span>
+                  <span className="text-2xl font-mono font-black text-stone-900 mt-1 block">
+                    {whitelist.length}
+                  </span>
+                  <span className="text-[11px] text-stone-500">Sur la Liste Blanche</span>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">
+                    Livraison 0 FCFA Tout Cameroun
+                  </span>
+                  <span className="text-2xl font-mono font-black text-emerald-800 mt-1 block">
+                    {whitelist.filter((w) => w.freeDeliveryAllRegions).length}
+                  </span>
+                  <span className="text-[11px] text-emerald-700 font-medium">Bénéficiaires actifs</span>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">
+                    Remise VIP Moyenne
+                  </span>
+                  <span className="text-2xl font-mono font-black text-amber-800 mt-1 block">
+                    {whitelist.length > 0
+                      ? Math.round(whitelist.reduce((sum, w) => sum + w.discountPercent, 0) / whitelist.length)
+                      : 0}%
+                  </span>
+                  <span className="text-[11px] text-amber-900 font-medium">Appliquée d'office</span>
+                </div>
+              </div>
+
+              {/* Whitelist Table */}
+              <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-stone-100 flex flex-col sm:flex-row gap-3 justify-between items-center">
+                  <div className="relative w-full sm:w-72">
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                    <input
+                      type="text"
+                      placeholder="Rechercher par nom, téléphone, niveau..."
+                      value={whitelistSearch}
+                      onChange={(e) => setWhitelistSearch(e.target.value)}
+                      className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-amber-700"
+                    />
+                  </div>
+                  <span className="text-xs text-stone-500 font-semibold">
+                    {filteredWhitelist.length} contact{filteredWhitelist.length > 1 ? 's' : ''} sur la liste
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-stone-50 border-b border-stone-200 text-stone-600 font-bold uppercase tracking-wider">
+                      <tr>
+                        <th className="p-3.5">Client d'Honneur</th>
+                        <th className="p-3.5">Statut VIP</th>
+                        <th className="p-3.5">Remise Automatique</th>
+                        <th className="p-3.5">Livraison Offerte</th>
+                        <th className="p-3.5">Notes Internes</th>
+                        <th className="p-3.5 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100 font-medium text-stone-800">
+                      {filteredWhitelist.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-stone-500">
+                            Aucun contact sur la liste blanche pour l'instant. Cliquez sur "Ajouter un Client VIP" pour en inscrire un.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredWhitelist.map((w) => {
+                          const levelBadges: Record<string, string> = {
+                            direction: 'bg-purple-100 text-purple-900 border-purple-300 font-black',
+                            ambassadeur: 'bg-amber-100 text-amber-900 border-amber-300 font-black',
+                            partenaire: 'bg-blue-100 text-blue-900 border-blue-300 font-black',
+                            vip: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold',
+                          };
+                          return (
+                            <tr key={w.id} className="hover:bg-stone-50/80 transition-colors">
+                              <td className="p-3.5">
+                                <div className="font-bold text-stone-900">{w.name}</div>
+                                <div className="text-[11px] text-stone-600 font-mono">{w.phone}</div>
+                                {w.email && <div className="text-[10px] text-stone-400">{w.email}</div>}
+                              </td>
+                              <td className="p-3.5">
+                                <span className={`text-[10px] uppercase px-2.5 py-0.5 rounded-full border shadow-2xs ${levelBadges[w.vipLevel] || levelBadges.vip}`}>
+                                  {w.vipLevel}
+                                </span>
+                              </td>
+                              <td className="p-3.5">
+                                <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                  -{w.discountPercent}%
+                                </span>
+                              </td>
+                              <td className="p-3.5">
+                                {w.freeDeliveryAllRegions ? (
+                                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-600 text-white">
+                                    0 FCFA (10 Régions)
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-stone-500 font-mono">Tarif standard</span>
+                                )}
+                              </td>
+                              <td className="p-3.5 text-stone-600 max-w-xs truncate text-[11px]">
+                                {w.notes || '—'}
+                              </td>
+                              <td className="p-3.5 text-right">
+                                <button
+                                  onClick={() => deleteWhitelistEntry(w.id)}
+                                  className="p-1.5 text-stone-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Retirer de la Liste Blanche"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
         </main>
@@ -1794,6 +2271,194 @@ export const AdminPortal: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      {/* MODAL: ADD WHITELIST VIP */}
+      {isWhitelistModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <form onSubmit={handleAddWhitelistSubmit} className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200 space-y-4 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2 text-emerald-900 font-bold text-base">
+                <UserCheck size={20} className="text-emerald-700" />
+                <h3 className="font-serif">Inscrire un Client sur la Liste Blanche VIP</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWhitelistModalOpen(false)}
+                className="p-1 text-stone-400 hover:text-stone-700 rounded-lg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div>
+              <label className="block font-bold text-stone-700 mb-1">Nom & Prénom *</label>
+              <input
+                type="text"
+                required
+                value={wlName}
+                onChange={(e) => setWlName(e.target.value)}
+                placeholder="Ex: Hon. Charles Ndongo"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 font-medium"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">Téléphone Principal *</label>
+                <input
+                  type="text"
+                  required
+                  value={wlPhone}
+                  onChange={(e) => setWlPhone(e.target.value)}
+                  placeholder="+237 6XX XX XX XX"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">Email (Optionnel)</label>
+                <input
+                  type="email"
+                  value={wlEmail}
+                  onChange={(e) => setWlEmail(e.target.value)}
+                  placeholder="contact@vip.cm"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">Rang / Statut VIP</label>
+                <select
+                  value={wlVipLevel}
+                  onChange={(e) => setWlVipLevel(e.target.value as any)}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 cursor-pointer font-bold text-stone-800"
+                >
+                  <option value="vip">VIP</option>
+                  <option value="ambassadeur">Ambassadeur</option>
+                  <option value="direction">Direction</option>
+                  <option value="partenaire">Partenaire</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">Remise Automatique (%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={wlDiscountPercent}
+                  onChange={(e) => setWlDiscountPercent(Number(e.target.value))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 font-mono font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex items-center justify-between">
+              <div>
+                <span className="font-bold text-emerald-950 block">Livraison Offerte (0 FCFA)</span>
+                <span className="text-[10px] text-emerald-800">Gratuité totale dans les 10 régions du Cameroun</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={wlFreeDelivery}
+                onChange={(e) => setWlFreeDelivery(e.target.checked)}
+                className="w-4 h-4 rounded text-emerald-700 focus:ring-emerald-500 border-emerald-300"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-stone-700 mb-1">Notes Internes</label>
+              <input
+                type="text"
+                value={wlNotes}
+                onChange={(e) => setWlNotes(e.target.value)}
+                placeholder="Ex: Partenaire officiel gala Yaoundé"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setIsWhitelistModalOpen(false)}
+                className="px-4 py-2 rounded-full border border-stone-300 font-bold"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-full bg-stone-900 text-white font-bold"
+              >
+                Inscrire sur la Whitelist
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL: BONUS POINTS FOR LOYALTY MEMBER */}
+      {bonusMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200 space-y-4 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2 text-amber-900 font-bold text-base">
+                <Crown size={20} className="text-amber-600" />
+                <h3 className="font-serif">Attribuer des Points Bonus Club Prestige</h3>
+              </div>
+              <button
+                onClick={() => setBonusMember(null)}
+                className="p-1 text-stone-400 hover:text-stone-700 rounded-lg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-stone-700 space-y-1">
+              <p><strong>Bénéficiaire :</strong> {bonusMember.name} ({bonusMember.phone})</p>
+              <p><strong>Solde Actuel :</strong> <span className="font-mono font-bold text-amber-800">{bonusMember.points} points</span> (Rang {bonusMember.tier.toUpperCase()})</p>
+            </div>
+
+            <div>
+              <label className="block font-bold text-stone-700 mb-1">Nombre de Points Bonus à Créditer</label>
+              <input
+                type="number"
+                min={1}
+                value={bonusPoints}
+                onChange={(e) => setBonusPoints(Number(e.target.value))}
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 font-mono font-bold text-sm text-stone-900"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-stone-700 mb-1">Motif (Journal de Traçabilité)</label>
+              <input
+                type="text"
+                value={bonusReason}
+                onChange={(e) => setBonusReason(e.target.value)}
+                placeholder="Ex: Geste commercial ou anniversaire"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 text-xs"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setBonusMember(null)}
+                className="px-4 py-2 rounded-full border border-stone-300 font-bold"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyBonusPoints}
+                className="px-5 py-2 rounded-full bg-stone-900 text-white font-bold"
+              >
+                Créditer les Points
+              </button>
+            </div>
           </div>
         </div>
       )}

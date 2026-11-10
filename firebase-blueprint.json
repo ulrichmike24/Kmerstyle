@@ -18,6 +18,9 @@
         "images": { "type": "array" },
         "variants": { "type": "array" },
         "brand": { "type": "string", "maxLength": 100 },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "reviews": { "type": "array" },
         "isActive": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -113,6 +116,59 @@
         "omMerchantCode": { "type": "string", "maxLength": 50 },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
+    },
+    "ShippingRate": {
+      "title": "ShippingRate",
+      "description": "Cameroon city and regional shipping rates with dynamic fees and delivery time estimates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "town": { "type": "string", "maxLength": 100 },
+        "region": { "type": "string", "maxLength": 150 },
+        "fee": { "type": "number" },
+        "deliveryTime": { "type": "object" },
+        "freeShippingEligible": { "type": "boolean" },
+        "minOrderForFreeShipping": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "town", "fee"]
+    },
+    "LoyaltyMember": {
+      "title": "LoyaltyMember",
+      "description": "Customer loyalty program member with points, VIP tier, and rewards",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 25 },
+        "name": { "type": "string", "maxLength": 150 },
+        "email": { "type": "string", "maxLength": 150 },
+        "city": { "type": "string", "maxLength": 100 },
+        "points": { "type": "number" },
+        "tier": { "type": "string", "enum": ["bronze", "argent", "or", "platine"] },
+        "totalSpent": { "type": "number" },
+        "ordersCount": { "type": "number" },
+        "joinedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "phone", "name", "points"]
+    },
+    "WhitelistEntry": {
+      "title": "WhitelistEntry",
+      "description": "VIP Whitelist patrons enjoying free delivery across Cameroon, automatic discounts, and priority dispatch",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 25 },
+        "email": { "type": "string", "maxLength": 150 },
+        "name": { "type": "string", "maxLength": 150 },
+        "vipLevel": { "type": "string", "enum": ["vip", "ambassadeur", "direction", "partenaire"] },
+        "discountPercent": { "type": "number" },
+        "freeDeliveryAllRegions": { "type": "boolean" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "addedAt": { "type": "string", "format": "date-time" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "phone", "name"]
     }
   },
   "firestore": {
@@ -139,6 +195,18 @@
     "/settings/{settingId}": {
       "schema": { "$ref": "Setting" },
       "description": "System configuration and transferable admin credentials"
+    },
+    "/shipping_rates/{rateId}": {
+      "schema": { "$ref": "ShippingRate" },
+      "description": "Dynamic city delivery fees and transit estimates across Cameroon"
+    },
+    "/loyalty_members/{memberId}": {
+      "schema": { "$ref": "LoyaltyMember" },
+      "description": "Customer loyalty program members and points balances"
+    },
+    "/whitelist/{entryId}": {
+      "schema": { "$ref": "WhitelistEntry" },
+      "description": "Privileged VIP patrons with automatic perks"
     }
   }
 }

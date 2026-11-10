@@ -32,25 +32,21 @@ export const Footer: React.FC = () => {
             </div>
           </div>
 
-          {/* Col 2: Showrooms in Cameroon */}
+          {/* Col 2: Showroom in Cameroon */}
           <div className="space-y-3">
             <h4 className="font-serif font-bold text-sm text-white uppercase tracking-wider">
-              {language === 'fr' ? 'Nos Showrooms' : 'Our Showrooms'}
+              {language === 'fr' ? 'Siège & Showroom' : 'Headquarters & Showroom'}
             </h4>
             <div className="space-y-2 text-stone-400">
               <div className="flex items-start gap-2">
                 <MapPin size={15} className="text-amber-500 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-stone-200">Douala :</strong>
-                  <p>Boulevard de la Liberté, Akwa</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <MapPin size={15} className="text-amber-500 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="text-stone-200">Yaoundé :</strong>
+                  <strong className="text-stone-200">Yaoundé (Siège Unique) :</strong>
                   <p>Quartier Bastos, descente Ambassade</p>
                 </div>
+              </div>
+              <div className="flex items-start gap-2 pt-1 text-[11px] text-amber-300/90">
+                <span>🚚 Expéditions express vers toutes les régions du Cameroun</span>
               </div>
             </div>
           </div>
@@ -58,12 +54,14 @@ export const Footer: React.FC = () => {
           {/* Col 3: Customer Service */}
           <div className="space-y-3">
             <h4 className="font-serif font-bold text-sm text-white uppercase tracking-wider">
-              {language === 'fr' ? 'Service Client' : 'Customer Care'}
+              {language === 'fr' ? 'Service Client & WhatsApp' : 'Customer Care & WhatsApp'}
             </h4>
             <div className="space-y-2 text-stone-400">
               <div className="flex items-center gap-2">
                 <Phone size={14} className="text-amber-500 shrink-0" />
-                <span>+237 699 00 00 00 / 677 00 00 00</span>
+                <a href="tel:+237659172101" className="hover:text-white font-mono font-semibold">
+                  +237 659 17 21 01
+                </a>
               </div>
               <div className="flex items-center gap-2">
                 <Clock size={14} className="text-amber-500 shrink-0" />
@@ -71,7 +69,9 @@ export const Footer: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Mail size={14} className="text-amber-500 shrink-0" />
-                <span>contact@kamerchic.cm</span>
+                <a href="mailto:ngassaeric17@gmail.com" className="hover:text-white font-mono">
+                  ngassaeric17@gmail.com
+                </a>
               </div>
             </div>
           </div>
@@ -85,7 +85,7 @@ export const Footer: React.FC = () => {
               <li>• {language === 'fr' ? 'Tissus & cuirs 100% authentiques' : '100% authentic fabrics & leathers'}</li>
               <li>• {language === 'fr' ? 'Échange sous 48h en cas de mauvaise taille' : '48h size exchange guarantee'}</li>
               <li>• {language === 'fr' ? 'Vérification du colis avant paiement en espèces' : 'Inspect before paying cash'}</li>
-              <li>• {language === 'fr' ? 'Livraison sécurisée par livreurs dédiés' : 'Vetted dedicated delivery couriers'}</li>
+              <li>• {language === 'fr' ? 'Livraison sécurisée partout au Cameroun' : 'Secure delivery across all Cameroon'}</li>
             </ul>
           </div>
         </div>
@@ -93,24 +93,12 @@ export const Footer: React.FC = () => {
         {/* Bottom bar */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between text-stone-500 text-[11px] gap-4">
           <p>
-            © {new Date().getFullYear()} KamerChic Cameroun. Tous droits réservés.
+            © {new Date().getFullYear()} KamerChic Cameroun • Yaoundé. Tous droits réservés.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <a href="#" className="hover:text-stone-300">Conditions Générales de Vente</a>
             <a href="#" className="hover:text-stone-300">Politique de Confidentialité</a>
-            <span className="text-stone-700">|</span>
-            <button
-              onClick={() => setActivePortal('admin')}
-              className="text-stone-400 hover:text-amber-400 flex items-center gap-1 cursor-pointer"
-            >
-              🔒 Direction (Admin 2FA)
-            </button>
-            <button
-              onClick={() => setActivePortal('delivery')}
-              className="text-stone-400 hover:text-amber-400 flex items-center gap-1 cursor-pointer"
-            >
-              🛵 Espace Coursiers
-            </button>
+            <a href="#" className="hover:text-stone-300">Programme de Fidélité VIP</a>
           </div>
         </div>
       </div>

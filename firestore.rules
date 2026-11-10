@@ -50,6 +50,24 @@ service cloud.firestore {
       allow read, write: if isValidId(settingId);
     }
 
+    // Dynamic Shipping Rates for Cameroon cities
+    match /shipping_rates/{rateId} {
+      allow read: if true;
+      allow write: if isValidId(rateId);
+    }
+
+    // Customer Loyalty Program (Club Prestige)
+    match /loyalty_members/{memberId} {
+      allow read: if true;
+      allow write: if isValidId(memberId);
+    }
+
+    // VIP Whitelist (Free delivery & VIP privileges)
+    match /whitelist/{entryId} {
+      allow read: if true;
+      allow write: if isValidId(entryId);
+    }
+
     // Test connection check
     match /test/{docId} {
       allow read, write: if true;

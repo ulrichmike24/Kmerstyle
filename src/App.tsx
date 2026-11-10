@@ -11,6 +11,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { OrderTrackingModal } from './components/OrderTrackingModal';
 import { SizeGuideModal } from './components/SizeGuideModal';
+import { LoyaltyModal } from './components/LoyaltyModal';
 import { WhatsAppFloatingButton } from './components/WhatsAppFloatingButton';
 import { GeminiShoppingAssistant } from './components/GeminiShoppingAssistant';
 import { AdminPortal } from './components/admin/AdminPortal';
@@ -55,6 +56,7 @@ function AppContent() {
       <CheckoutModal />
       <OrderTrackingModal />
       <SizeGuideModal />
+      <LoyaltyModal />
       <WhatsAppFloatingButton />
       <GeminiShoppingAssistant />
     </div>

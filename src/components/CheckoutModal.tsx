@@ -17,6 +17,7 @@ import {
   ArrowRight,
   Copy,
   Check,
+  Crown,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useStore } from '../context/StoreContext';
@@ -57,17 +58,24 @@ export const CheckoutModal: React.FC = () => {
     momoMerchantCode,
     omMerchantCode,
     language,
+    shippingRates,
+    calculateDeliveryFee,
+    getShippingRateForTown,
+    checkWhitelist,
+    lookupLoyaltyMember,
+    redeemLoyaltyPoints,
   } = useStore();
 
-  // Form State (No pre-filled fake data!)
+  // Form State - Default payment method is 'cod' (Payment on Delivery)
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [city, setCity] = useState('Yaoundé');
   const [quartier, setQuartier] = useState('');
   const [landmark, setLandmark] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'om' | 'momo' | 'cod'>('om');
+  const [paymentMethod, setPaymentMethod] = useState<'om' | 'momo' | 'cod'>('cod');
   const [transactionRef, setTransactionRef] = useState('');
+  const [useLoyaltyDiscount, setUseLoyaltyDiscount] = useState(false);
 
   // UI state
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -76,11 +84,26 @@ export const CheckoutModal: React.FC = () => {
 
   if (!isCheckoutOpen || cart.length === 0) return null;
 
-  // Selected city fee
-  const selectedCityRate = CAMEROON_CITIES.find((c) => c.name === city) || CAMEROON_CITIES[0];
-  const isFreeDelivery = cartSubtotal >= freeShippingThreshold && (city === 'Yaoundé' || city === 'Douala');
-  const deliveryFee = isFreeDelivery ? 0 : selectedCityRate.fee;
-  const grandTotal = Math.max(0, cartSubtotal - discountAmount + deliveryFee);
+  // 1. VIP Whitelist Auto-Detection
+  const whitelistVip = checkWhitelist(phone) || (email ? checkWhitelist(email) : undefined);
+
+  // 2. Club Prestige Member Check
+  const loyaltyMember = phone.length >= 6 ? lookupLoyaltyMember(phone) : undefined;
+  const availablePoints = loyaltyMember?.points || 0;
+  // Each point = 50 FCFA discount (up to 30% of cart subtotal)
+  const maxRedeemablePoints = Math.min(availablePoints, Math.floor((cartSubtotal * 0.3) / 50));
+  const loyaltyDiscountValue = useLoyaltyDiscount && maxRedeemablePoints > 0 ? maxRedeemablePoints * 50 : 0;
+
+  // 3. Shipping Calculation
+  const selectedShippingRate = getShippingRateForTown(city) || shippingRates[0];
+  const standardDeliveryFee = calculateDeliveryFee(city, cartSubtotal);
+  const deliveryFee = whitelistVip?.freeDeliveryAllRegions ? 0 : standardDeliveryFee;
+  const isFreeDelivery = deliveryFee === 0;
+
+  // 4. VIP Discount from Whitelist
+  const vipDiscountAmount = whitelistVip ? Math.round((cartSubtotal * whitelistVip.discountPercent) / 100) : 0;
+  const totalDiscounts = discountAmount + vipDiscountAmount + loyaltyDiscountValue;
+  const grandTotal = Math.max(0, cartSubtotal - totalDiscounts + deliveryFee);
 
   const activeMerchantCode = paymentMethod === 'om' ? omMerchantCode : momoMerchantCode;
 
@@ -128,6 +151,11 @@ export const CheckoutModal: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // If loyalty discount used, deduct points
+      if (useLoyaltyDiscount && maxRedeemablePoints > 0) {
+        await redeemLoyaltyPoints(phone, maxRedeemablePoints);
+      }
+
       // Trigger JS Automation & Firestore Record
       const newOrder = await placeOrder({
         customerName: name.trim(),
@@ -259,9 +287,55 @@ export const CheckoutModal: React.FC = () => {
                   className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2.5 text-xs text-stone-900 font-mono focus:outline-none focus:border-amber-800"
                 />
               </div>
+
+              {/* VIP Whitelist Recognition Banner */}
+              {whitelistVip && (
+                <div className="sm:col-span-2 bg-gradient-to-r from-amber-50 to-emerald-50 border border-emerald-300 rounded-xl p-3 flex items-start gap-2.5 animate-in fade-in">
+                  <Sparkles size={16} className="text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-stone-900">
+                        Privilège Liste Blanche : {whitelistVip.name}
+                      </span>
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-600 text-white">
+                        VIP {whitelistVip.vipLevel.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800 mt-0.5">
+                      Livraison 100% offerte dans toutes les régions du Cameroun + remise exclusive de {whitelistVip.discountPercent}% appliquées d'office !
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Club Prestige Points Card */}
+              {availablePoints >= 10 && (
+                <div className="sm:col-span-2 bg-amber-50/80 border border-amber-300/80 rounded-xl p-3 flex items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <Crown size={17} className="text-amber-700 shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold text-amber-950">
+                        Club Prestige : {availablePoints} points disponibles
+                      </p>
+                      <p className="text-[11px] text-stone-600">
+                        Utiliser {maxRedeemablePoints} points pour déduire {formatXAF(maxRedeemablePoints * 50)} de votre panier.
+                      </p>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer shrink-0 bg-white px-2.5 py-1.5 rounded-lg border border-amber-200 shadow-2xs">
+                    <input
+                      type="checkbox"
+                      checked={useLoyaltyDiscount}
+                      onChange={(e) => setUseLoyaltyDiscount(e.target.checked)}
+                      className="w-4 h-4 rounded text-amber-800 focus:ring-amber-500 border-amber-300"
+                    />
+                    <span className="text-xs font-bold text-amber-900">Appliquer</span>
+                  </label>
+                </div>
+              )}
             </div>
 
-            {/* City selection with variable delivery fees */}
+            {/* City selection with dynamic rates from Firestore shipping_rates */}
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
                 Ville de Livraison au Cameroun *
@@ -271,15 +345,15 @@ export const CheckoutModal: React.FC = () => {
                 onChange={(e) => setCity(e.target.value)}
                 className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-stone-900 focus:outline-none focus:border-amber-800 cursor-pointer"
               >
-                {CAMEROON_CITIES.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name} — {formatXAF(c.fee)} ({c.region})
+                {shippingRates.map((c) => (
+                  <option key={c.id || c.town} value={c.town}>
+                    {c.town} — {formatXAF(c.fee)} ({c.region})
                   </option>
                 ))}
               </select>
               <p className="text-[11px] text-amber-900 mt-1 font-medium">
-                ⏱️ {selectedCityRate.deliveryTime} • Frais de livraison :{' '}
-                <strong className="font-mono">{isFreeDelivery ? 'OFFERTS (Gratuit)' : formatXAF(selectedCityRate.fee)}</strong>
+                ⏱️ {selectedShippingRate?.deliveryTime?.[language] || selectedShippingRate?.deliveryTime?.fr || 'Livraison rapide'} • Frais de livraison :{' '}
+                <strong className="font-mono">{isFreeDelivery ? 'OFFERTS (Gratuit)' : formatXAF(deliveryFee)}</strong>
               </p>
             </div>
 
@@ -467,6 +541,18 @@ export const CheckoutModal: React.FC = () => {
               <div className="flex justify-between text-emerald-700">
                 <span>Remise coupon :</span>
                 <span className="font-mono">-{formatXAF(discountAmount)}</span>
+              </div>
+            )}
+            {vipDiscountAmount > 0 && (
+              <div className="flex justify-between text-emerald-700 font-bold">
+                <span>Remise Liste Blanche VIP (-{whitelistVip?.discountPercent}%) :</span>
+                <span className="font-mono">-{formatXAF(vipDiscountAmount)}</span>
+              </div>
+            )}
+            {loyaltyDiscountValue > 0 && (
+              <div className="flex justify-between text-amber-800 font-bold">
+                <span>Points Club Prestige (-{maxRedeemablePoints} pts) :</span>
+                <span className="font-mono">-{formatXAF(loyaltyDiscountValue)}</span>
               </div>
             )}
             <div className="flex justify-between text-stone-600">

@@ -90,6 +90,20 @@ export interface DeliveryZone {
   cities: string[];
 }
 
+export interface ShippingRate {
+  id: string; // e.g. "yaounde", "douala"
+  town: string; // "Yaoundé", "Douala", "Bafoussam", etc.
+  region: string;
+  fee: number; // In XAF
+  deliveryTime: {
+    fr: string;
+    en: string;
+  };
+  freeShippingEligible?: boolean;
+  minOrderForFreeShipping?: number;
+  isActive: boolean;
+}
+
 export interface Coupon {
   code: string;
   discountType: 'percentage' | 'fixed';
@@ -217,4 +231,35 @@ export interface CourierSession {
   role: 'delivery';
   issuedAt: number;
   expiresAt: number;
+}
+
+export type LoyaltyTier = 'bronze' | 'argent' | 'or' | 'platine';
+
+export interface LoyaltyMember {
+  id: string; // phone or unique id
+  phone: string;
+  name: string;
+  email?: string;
+  city?: string;
+  points: number;
+  tier: LoyaltyTier;
+  totalSpent: number;
+  ordersCount: number;
+  joinedAt: string;
+  updatedAt: string;
+}
+
+export type WhitelistVipLevel = 'vip' | 'ambassadeur' | 'direction' | 'partenaire';
+
+export interface WhitelistEntry {
+  id: string;
+  phone: string;
+  email?: string;
+  name: string;
+  vipLevel: WhitelistVipLevel;
+  discountPercent: number; // e.g. 10
+  freeDeliveryAllRegions: boolean;
+  notes?: string;
+  addedAt: string;
+  isActive: boolean;
 }

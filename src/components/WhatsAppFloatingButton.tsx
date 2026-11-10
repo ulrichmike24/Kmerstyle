@@ -7,7 +7,7 @@ export const WhatsAppFloatingButton: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [customText, setCustomText] = useState('');
 
-  const cameroonSupportPhone = '237699000000'; // Standard Cameroon WhatsApp Business line
+  const cameroonSupportPhone = '237659172101'; // Official KamerChic line +237 659 17 21 01
 
   const quickPrompts = [
     {
@@ -15,8 +15,8 @@ export const WhatsAppFloatingButton: React.FC = () => {
       en: 'Hello, I have a question about size availability.',
     },
     {
-      fr: 'Bonjour, je souhaite des précisions sur les délais de livraison à Yaoundé.',
-      en: 'Hello, I would like to know delivery times in Yaoundé.',
+      fr: 'Bonjour, je souhaite des précisions sur les délais de livraison depuis Yaoundé.',
+      en: 'Hello, I would like to know delivery times from Yaoundé.',
     },
     {
       fr: 'Bonjour, je souhaite passer commande directement par WhatsApp.',
@@ -25,7 +25,7 @@ export const WhatsAppFloatingButton: React.FC = () => {
   ];
 
   const handleSend = (text: string) => {
-    const message = encodeURIComponent(text || (language === 'fr' ? 'Bonjour KamerChic, j’aimerais des conseils.' : 'Hello KamerChic, I need assistance.'));
+    const message = encodeURIComponent(text || (language === 'fr' ? 'Bonjour KamerChic Yaoundé, j’aimerais des conseils.' : 'Hello KamerChic Yaoundé, I need assistance.'));
     window.open(`https://wa.me/${cameroonSupportPhone}?text=${message}`, '_blank');
     setIsOpen(false);
   };
@@ -44,7 +44,7 @@ export const WhatsAppFloatingButton: React.FC = () => {
                 <h4 className="font-bold text-xs text-stone-900">Support KamerChic</h4>
                 <p className="text-[10px] text-emerald-600 flex items-center gap-1 font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  {language === 'fr' ? 'En ligne à Douala' : 'Online in Douala'}
+                  {language === 'fr' ? 'En ligne à Yaoundé (Bastos)' : 'Online in Yaoundé (Bastos)'}
                 </p>
               </div>
             </div>

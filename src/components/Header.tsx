@@ -7,12 +7,10 @@ import {
   Menu,
   X,
   Globe,
-  User,
-  ShieldCheck,
-  ChevronDown,
+  Crown,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { ProductCategory, UserRole } from '../types';
+import { ProductCategory } from '../types';
 import { formatXAF } from '../lib/formatters';
 
 export const Header: React.FC = () => {
@@ -28,15 +26,12 @@ export const Header: React.FC = () => {
     setSelectedCategory,
     searchQuery,
     setSearchQuery,
-    user,
-    setUserRole,
     setActiveTrackingOrder,
     orders,
-    setActivePortal,
+    setIsLoyaltyModalOpen,
   } = useStore();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const categories: { id: ProductCategory | 'all'; label: string }[] = [
@@ -72,7 +67,7 @@ export const Header: React.FC = () => {
         deliveryFee: 0,
         discount: 0,
         total: 0,
-        paymentMethod: 'momo',
+        paymentMethod: 'cod',
         paymentStatus: 'pending',
         status: 'pending',
         trackingEvents: [],
@@ -98,7 +93,7 @@ export const Header: React.FC = () => {
             {/* Showrooms Note */}
             <div className="hidden md:flex items-center gap-1.5 text-stone-400 text-[11px]">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-              <span>Douala (Akwa) • Yaoundé (Bastos)</span>
+              <span>Siège Bastos, Yaoundé • Expédition dans les 10 régions</span>
             </div>
 
             {/* Language Switcher */}
@@ -143,7 +138,7 @@ export const Header: React.FC = () => {
               KAMER<span className="text-amber-700">CHIC</span>
             </span>
             <span className="text-[9px] sm:text-[10px] tracking-widest uppercase font-medium text-stone-500 -mt-1">
-              DOUALA • YAOUNDÉ
+              MAISON YAOUNDÉ • LIVRAISON CAMEROUN
             </span>
           </a>
         </div>
@@ -181,6 +176,16 @@ export const Header: React.FC = () => {
             <Search size={20} />
           </button>
 
+          {/* Club Prestige Loyalty */}
+          <button
+            onClick={() => setIsLoyaltyModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors"
+            title="Club Prestige KamerChic"
+          >
+            <Crown size={15} className="text-amber-600 fill-amber-500/20" />
+            <span className="hidden md:inline font-bold">Club Prestige</span>
+          </button>
+
           {/* Track order button */}
           <button
             onClick={openLatestOrderTracking}
@@ -197,9 +202,7 @@ export const Header: React.FC = () => {
           {/* Wishlist */}
           <button
             onClick={() => {
-              // Filters to show wishlist or simple feedback
               if (wishlist.length > 0) {
-                // Focus on products
                 const el = document.getElementById('catalog-section');
                 el?.scrollIntoView({ behavior: 'smooth' });
               }
@@ -311,6 +314,17 @@ export const Header: React.FC = () => {
               <div className="pt-4 border-t border-stone-200 space-y-2">
                 <button
                   onClick={() => {
+                    setIsLoyaltyModalOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-amber-900 bg-amber-50 hover:bg-amber-100 rounded-lg font-bold border border-amber-200"
+                >
+                  <Crown size={17} className="text-amber-600" />
+                  Club Prestige (Points & Avantages)
+                </button>
+
+                <button
+                  onClick={() => {
                     openLatestOrderTracking();
                     setMobileMenuOpen(false);
                   }}
@@ -319,24 +333,13 @@ export const Header: React.FC = () => {
                   <Truck size={17} className="text-amber-700" />
                   {t.tracking.title}
                 </button>
-
-                <div className="pt-2">
-                  <button
-                    onClick={() => {
-                      setActivePortal('admin');
-                      setMobileMenuOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-stone-500 hover:text-amber-800 font-semibold"
-                  >
-                    🔒 Accès Collaborateurs (Direction & Coursiers)
-                  </button>
-                </div>
               </div>
             </div>
 
-            <div className="pt-6 border-t border-stone-200 text-xs text-stone-500">
-              <p className="font-semibold text-stone-700">KamerChic Douala & Yaoundé</p>
-              <p>WhatsApp Support : +237 699 00 00 00</p>
+            <div className="pt-6 border-t border-stone-200 text-xs text-stone-500 space-y-1">
+              <p className="font-semibold text-stone-800">KamerChic Yaoundé • Siège Bastos</p>
+              <p className="text-stone-600">WhatsApp & Appel : +237 659 17 21 01</p>
+              <p className="text-stone-500">Courriel : ngassaeric17@gmail.com</p>
             </div>
           </div>
         </div>

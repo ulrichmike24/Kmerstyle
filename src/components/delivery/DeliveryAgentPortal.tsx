@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Eye,
   Check,
+  X,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useStore } from '../../context/StoreContext';

@@ -13,6 +13,7 @@ import {
   Product,
   CartItem,
   ProductVariant,
+  ProductReview,
   Order,
   OrderStatus,
   UserProfile,
@@ -28,6 +29,11 @@ import {
   AuditCategory,
   AdminSession,
   CourierSession,
+  ShippingRate,
+  LoyaltyMember,
+  LoyaltyTier,
+  WhitelistEntry,
+  WhitelistVipLevel,
 } from '../types';
 import { SEED_PRODUCTS, SEED_DELIVERY_ZONES, SEED_COUPONS } from '../data/seedData';
 import { generateOrderNumber, formatXAF } from '../lib/formatters';
@@ -59,6 +65,10 @@ interface StoreContextType {
   language: Language;
   t: typeof translations['fr'];
   deliveryZones: DeliveryZone[];
+  shippingRates: ShippingRate[];
+  calculateDeliveryFee: (townOrLocation: string, subtotal?: number) => number;
+  getShippingRateForTown: (townOrLocation: string) => ShippingRate | undefined;
+  updateShippingRate: (rate: ShippingRate) => Promise<void>;
   coupons: Coupon[];
   appliedCoupon: Coupon | null;
   searchQuery: string;
@@ -134,9 +144,31 @@ interface StoreContextType {
   addProduct: (newProduct: Product) => Promise<void>;
   updateProduct: (updatedProduct: Product) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
+  addProductReview: (
+    productId: string,
+    review: {
+      authorName: string;
+      city: string;
+      rating: number;
+      comment: string;
+      verifiedBuyer?: boolean;
+    }
+  ) => Promise<void>;
   addCoupon: (coupon: Coupon) => void;
   deleteCoupon: (code: string) => void;
   updateDeliveryZoneFee: (zoneId: string, fee: number) => void;
+
+  // Loyalty & Whitelist VIP
+  loyaltyMembers: LoyaltyMember[];
+  whitelist: WhitelistEntry[];
+  isLoyaltyModalOpen: boolean;
+  setIsLoyaltyModalOpen: (open: boolean) => void;
+  lookupLoyaltyMember: (phoneOrEmail: string) => LoyaltyMember | undefined;
+  addOrUpdateLoyaltyPoints: (phone: string, name: string, pointsEarned: number, spentAmount: number) => Promise<LoyaltyMember>;
+  redeemLoyaltyPoints: (phone: string, pointsToRedeem: number) => Promise<boolean>;
+  checkWhitelist: (phoneOrEmail: string) => WhitelistEntry | undefined;
+  addWhitelistEntry: (entry: WhitelistEntry) => Promise<void>;
+  deleteWhitelistEntry: (entryId: string) => Promise<void>;
 
   // Auth, Couriers, Inventory, and Accounting operations
   adminLogin: (email: string, pass: string, totp: string) => Promise<{ success: boolean; error?: string }>;
@@ -156,6 +188,137 @@ interface StoreContextType {
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 const FREE_SHIPPING_THRESHOLD = 50000; // 50 000 FCFA
+
+export const DEFAULT_SHIPPING_RATES: ShippingRate[] = [
+  {
+    id: 'yaounde',
+    town: 'Yaoundé',
+    region: 'Centre (Siège & Showroom Bastos)',
+    fee: 1500,
+    deliveryTime: { fr: 'Livraison express en 2h à 4h', en: 'Express delivery in 2h - 4h' },
+    freeShippingEligible: true,
+    minOrderForFreeShipping: 50000,
+    isActive: true,
+  },
+  {
+    id: 'douala',
+    town: 'Douala',
+    region: 'Littoral (Showroom Akwa & Bonapriso)',
+    fee: 2500,
+    deliveryTime: { fr: 'Livraison en 24h ouvrées', en: 'Delivery within 24 business hours' },
+    freeShippingEligible: true,
+    minOrderForFreeShipping: 50000,
+    isActive: true,
+  },
+  {
+    id: 'bafoussam',
+    town: 'Bafoussam',
+    region: 'Ouest (Hauts Plateaux)',
+    fee: 3500,
+    deliveryTime: { fr: 'Livraison sous 24h à 48h', en: 'Delivery within 24h - 48h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'kribi',
+    town: 'Kribi',
+    region: 'Sud (Bord de Mer & Port)',
+    fee: 3500,
+    deliveryTime: { fr: 'Livraison sous 48h', en: 'Delivery within 48h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'limbe-buea',
+    town: 'Limbe / Buea',
+    region: 'Sud-Ouest (Mont Cameroun & Côte)',
+    fee: 3000,
+    deliveryTime: { fr: 'Livraison sous 24h à 48h', en: 'Delivery within 24h - 48h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'bamenda',
+    town: 'Bamenda',
+    region: 'Nord-Ouest',
+    fee: 4000,
+    deliveryTime: { fr: 'Livraison sous 48h', en: 'Delivery within 48h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'garoua',
+    town: 'Garoua',
+    region: 'Nord (Bénoué)',
+    fee: 5000,
+    deliveryTime: { fr: 'Expédition agence 48h à 72h', en: 'Agency dispatch 48h - 72h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'maroua',
+    town: 'Maroua',
+    region: 'Extrême-Nord (Diamaré)',
+    fee: 5000,
+    deliveryTime: { fr: 'Expédition agence 48h à 72h', en: 'Agency dispatch 48h - 72h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'ngaoundere',
+    town: 'Ngaoundéré',
+    region: "Adamaoua (Château d'eau)",
+    fee: 4500,
+    deliveryTime: { fr: 'Expédition sous 48h', en: 'Dispatch within 48h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'bertoua',
+    town: 'Bertoua',
+    region: 'Est (Lom-et-Djérem)',
+    fee: 4500,
+    deliveryTime: { fr: 'Expédition sous 48h', en: 'Dispatch within 48h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'ebolowa',
+    town: 'Ebolowa',
+    region: 'Sud (Mvila)',
+    fee: 3500,
+    deliveryTime: { fr: 'Expédition sous 24h à 48h', en: 'Dispatch within 24h - 48h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'dschang',
+    town: 'Dschang',
+    region: 'Ouest (Menoua)',
+    fee: 3500,
+    deliveryTime: { fr: 'Livraison sous 24h à 48h', en: 'Delivery within 24h - 48h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'foumban',
+    town: 'Foumban',
+    region: 'Ouest (Noun & Cité Royale)',
+    fee: 3500,
+    deliveryTime: { fr: 'Livraison sous 48h', en: 'Delivery within 48h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+  {
+    id: 'edea',
+    town: 'Edéa',
+    region: 'Littoral (Sanaga-Maritime)',
+    fee: 3000,
+    deliveryTime: { fr: 'Livraison sous 24h à 48h', en: 'Delivery within 24h - 48h' },
+    freeShippingEligible: false,
+    isActive: true,
+  },
+];
 
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // 1. Language state (French default)
@@ -256,6 +419,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   // Audit Logs (starts 100% empty)
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  // Dynamic Cameroon Shipping Rates from Firestore collection 'shipping_rates'
+  const [shippingRates, setShippingRates] = useState<ShippingRate[]>(DEFAULT_SHIPPING_RATES);
+  // Club Prestige Loyalty Members
+  const [loyaltyMembers, setLoyaltyMembers] = useState<LoyaltyMember[]>([]);
+  // VIP Whitelist Clients
+  const [whitelist, setWhitelist] = useState<WhitelistEntry[]>([]);
+  // Loyalty modal trigger
+  const [isLoyaltyModalOpen, setIsLoyaltyModalOpen] = useState(false);
 
   // Merchant Codes
   const [momoMerchantCode, setMomoMerchantCode] = useState('789012');
@@ -440,6 +611,31 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => unsub();
   }, []);
 
+  // Shipping Rates Listener (Dynamic from 'shipping_rates' Firestore collection)
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, 'shipping_rates'),
+      (snap) => {
+        if (!snap.empty) {
+          const list: ShippingRate[] = [];
+          snap.forEach((d) => list.push(d.data() as ShippingRate));
+          setShippingRates(list);
+        } else {
+          // Initialize default Cameroon shipping rates in Firestore
+          DEFAULT_SHIPPING_RATES.forEach(async (rate) => {
+            await setDoc(doc(db, 'shipping_rates', rate.id), rate).catch(() => {});
+          });
+          setShippingRates(DEFAULT_SHIPPING_RATES);
+        }
+      },
+      (err) => {
+        console.warn('Firestore shipping_rates listener fallback:', err);
+        setShippingRates(DEFAULT_SHIPPING_RATES);
+      }
+    );
+    return () => unsub();
+  }, []);
+
   // Settings Listener (Merchant codes & Admin credentials)
   useEffect(() => {
     const unsub = onSnapshot(
@@ -459,6 +655,57 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
       },
       () => {}
+    );
+    return () => unsub();
+  }, []);
+
+  // Loyalty Members Listener (Club Prestige)
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, 'loyalty_members'),
+      (snap) => {
+        const list: LoyaltyMember[] = [];
+        snap.forEach((d) => list.push(d.data() as LoyaltyMember));
+        list.sort((a, b) => (b.points || 0) - (a.points || 0));
+        setLoyaltyMembers(list);
+      },
+      (err) => {
+        console.warn('Firestore loyalty listener fallback:', err);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // Whitelist VIP Listener
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, 'whitelist'),
+      (snap) => {
+        if (!snap.empty) {
+          const list: WhitelistEntry[] = [];
+          snap.forEach((d) => list.push(d.data() as WhitelistEntry));
+          setWhitelist(list);
+        } else {
+          // Initialize default whitelist entry for owner/direction
+          const initialVip: WhitelistEntry = {
+            id: 'wl-direction-01',
+            phone: '+237 659 17 21 01',
+            email: 'ngassaeric17@gmail.com',
+            name: 'Direction Générale KamerChic',
+            vipLevel: 'direction',
+            discountPercent: 15,
+            freeDeliveryAllRegions: true,
+            notes: 'Siège Yaoundé & Fondateur',
+            addedAt: new Date().toISOString(),
+            isActive: true,
+          };
+          setDoc(doc(db, 'whitelist', initialVip.id), initialVip).catch(() => {});
+          setWhitelist([initialVip]);
+        }
+      },
+      (err) => {
+        console.warn('Firestore whitelist listener fallback:', err);
+      }
     );
     return () => unsub();
   }, []);
@@ -826,7 +1073,149 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     );
   };
 
-  // Complete delivery with Photo Capture & Client Signature Proof
+  // Helper to normalize phone / email for lookup
+  const normalizeIdentifier = (val: string) => {
+    return val.replace(/\s+/g, '').replace(/^\+237/, '').toLowerCase();
+  };
+
+  const lookupLoyaltyMember = (phoneOrEmail: string): LoyaltyMember | undefined => {
+    if (!phoneOrEmail) return undefined;
+    const clean = normalizeIdentifier(phoneOrEmail);
+    return loyaltyMembers.find((m) => {
+      const pClean = normalizeIdentifier(m.phone || '');
+      const eClean = (m.email || '').trim().toLowerCase();
+      return pClean === clean || (eClean && eClean === clean);
+    });
+  };
+
+  const calculateTier = (points: number): LoyaltyTier => {
+    if (points >= 300) return 'platine';
+    if (points >= 150) return 'or';
+    if (points >= 50) return 'argent';
+    return 'bronze';
+  };
+
+  const addOrUpdateLoyaltyPoints = async (
+    phone: string,
+    name: string,
+    pointsEarned: number,
+    spentAmount: number
+  ): Promise<LoyaltyMember> => {
+    const cleanPhone = phone.trim();
+    const existing = lookupLoyaltyMember(cleanPhone);
+    const now = new Date().toISOString();
+
+    const currentPoints = existing ? existing.points : 0;
+    const newPoints = currentPoints + pointsEarned;
+    const newTotalSpent = (existing ? existing.totalSpent : 0) + spentAmount;
+    const newOrdersCount = (existing ? existing.ordersCount : 0) + 1;
+    const newTier = calculateTier(newPoints);
+
+    const memberId = existing ? existing.id : `lm-${Date.now()}`;
+    const updatedMember: LoyaltyMember = {
+      id: memberId,
+      phone: cleanPhone,
+      name: name || existing?.name || 'Client KamerChic',
+      email: existing?.email || '',
+      city: existing?.city || 'Yaoundé',
+      points: newPoints,
+      tier: newTier,
+      totalSpent: newTotalSpent,
+      ordersCount: newOrdersCount,
+      joinedAt: existing ? existing.joinedAt : now,
+      updatedAt: now,
+    };
+
+    try {
+      await setDoc(doc(db, 'loyalty_members', memberId), updatedMember);
+    } catch {
+      setLoyaltyMembers((prev) => {
+        const idx = prev.findIndex((m) => m.id === memberId);
+        if (idx >= 0) {
+          const cp = [...prev];
+          cp[idx] = updatedMember;
+          return cp;
+        }
+        return [updatedMember, ...prev];
+      });
+    }
+
+    addAuditLog(
+      'Points Club Prestige Attribués',
+      'order',
+      `+${pointsEarned} pts crédités à ${name} (${cleanPhone}). Total: ${newPoints} pts (Rang: ${newTier.toUpperCase()})`,
+      'Système Fidélité',
+      'success'
+    );
+
+    return updatedMember;
+  };
+
+  const redeemLoyaltyPoints = async (phone: string, pointsToRedeem: number): Promise<boolean> => {
+    const member = lookupLoyaltyMember(phone);
+    if (!member || member.points < pointsToRedeem) return false;
+
+    const remainingPoints = member.points - pointsToRedeem;
+    const newTier = calculateTier(remainingPoints);
+    const updated: LoyaltyMember = {
+      ...member,
+      points: remainingPoints,
+      tier: newTier,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await setDoc(doc(db, 'loyalty_members', member.id), updated);
+    } catch {
+      setLoyaltyMembers((prev) => prev.map((m) => (m.id === member.id ? updated : m)));
+    }
+
+    addAuditLog(
+      'Points Fidélité Déduits',
+      'order',
+      `Utilisation de ${pointsToRedeem} points pour ${member.name}. Solde restant: ${remainingPoints} pts`,
+      member.name,
+      'info'
+    );
+    return true;
+  };
+
+  const checkWhitelist = (phoneOrEmail: string): WhitelistEntry | undefined => {
+    if (!phoneOrEmail) return undefined;
+    const clean = normalizeIdentifier(phoneOrEmail);
+    return whitelist.find((w) => {
+      if (!w.isActive) return false;
+      const pClean = normalizeIdentifier(w.phone || '');
+      const eClean = (w.email || '').trim().toLowerCase();
+      return pClean === clean || (eClean && eClean === clean);
+    });
+  };
+
+  const addWhitelistEntry = async (entry: WhitelistEntry): Promise<void> => {
+    try {
+      await setDoc(doc(db, 'whitelist', entry.id), entry);
+    } catch {
+      setWhitelist((prev) => [entry, ...prev]);
+    }
+    addAuditLog(
+      'Client Ajouté à la Liste Blanche VIP',
+      'order',
+      `VIP: ${entry.name} (${entry.phone}) enregistré (${entry.vipLevel}, remise ${entry.discountPercent}%, livraison 0 FCFA)`,
+      'Direction',
+      'success'
+    );
+  };
+
+  const deleteWhitelistEntry = async (entryId: string): Promise<void> => {
+    try {
+      await deleteDoc(doc(db, 'whitelist', entryId));
+    } catch {
+      setWhitelist((prev) => prev.filter((w) => w.id !== entryId));
+    }
+    addAuditLog('Client Retiré de la Whitelist', 'order', `ID ${entryId} retiré de la liste blanche.`, 'Direction', 'warning');
+  };
+
+  // Complete delivery with Photo Capture & Client Signature Proof (Automates Comptabilité & Contrôlabilité)
   const completeDeliveryWithProof = async (
     orderId: string,
     proofImageBase64: string,
@@ -834,21 +1223,21 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   ) => {
     const now = new Date().toISOString();
     const targetOrder = orders.find((o) => o.id === orderId);
+    if (!targetOrder) return;
 
-    const trackingEvents = targetOrder
-      ? [
-          ...targetOrder.trackingEvents,
-          {
-            status: 'delivered' as OrderStatus,
-            timestamp: now,
-            note: {
-              fr: 'Colis remis en main propre. Preuve photo et signature du client enregistrées.',
-              en: 'Package delivered. Photo proof and client digital signature captured.',
-            },
-          },
-        ]
-      : [];
+    const trackingEvents = [
+      ...targetOrder.trackingEvents,
+      {
+        status: 'delivered' as OrderStatus,
+        timestamp: now,
+        note: {
+          fr: 'Colis remis en main propre. Preuve photo, signature client certifiée et paiement validés.',
+          en: 'Delivered in person. Photo proof, signature, and payment verified.',
+        },
+      },
+    ];
 
+    // 1. Update Order in Firestore
     try {
       await updateDoc(doc(db, 'orders', orderId), {
         status: 'delivered',
@@ -856,7 +1245,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         clientSignature: clientSignatureBase64,
         deliveredAt: now,
         updatedAt: now,
-        paymentStatus: 'paid', // Mark fully paid if COD
+        paymentStatus: 'paid',
         trackingEvents,
       });
     } catch (err) {
@@ -879,11 +1268,49 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       );
     }
 
+    // 2. Automate Courier Cash & Completed Delivery Count (Comptabilité & Contrôlabilité)
+    if (targetOrder.assignedAgentId) {
+      const courier = couriers.find((c) => c.id === targetOrder.assignedAgentId);
+      if (courier) {
+        const isCod = targetOrder.paymentMethod === 'cod';
+        const newCash = isCod ? (courier.currentCashCollected || 0) + targetOrder.total : courier.currentCashCollected;
+        const newCount = (courier.completedDeliveriesCount || 0) + 1;
+
+        try {
+          await updateDoc(doc(db, 'couriers', courier.id), {
+            currentCashCollected: newCash,
+            completedDeliveriesCount: newCount,
+          });
+        } catch {
+          setCouriers((prev) =>
+            prev.map((c) =>
+              c.id === courier.id
+                ? { ...c, currentCashCollected: newCash, completedDeliveriesCount: newCount }
+                : c
+            )
+          );
+        }
+      }
+    }
+
+    // 3. Automate Customer Loyalty Points (1 pt per 1 000 FCFA)
+    if (targetOrder.customerPhone) {
+      const pointsToAward = Math.max(1, Math.floor(targetOrder.total / 1000));
+      await addOrUpdateLoyaltyPoints(
+        targetOrder.customerPhone,
+        targetOrder.customerName,
+        pointsToAward,
+        targetOrder.total
+      ).catch(() => {});
+    }
+
+    // 4. Certified Audit Trail & Contrôlabilité
+    const certCode = `CERT-${orderId.slice(-6).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
     await addAuditLog(
-      'Livraison Conclue avec Preuve',
+      'Livraison Conclue & Contrôlabilité Certifiée',
       'delivery',
-      `Livraison de la commande ${targetOrder?.orderNumber || orderId} validée avec signature client et photo de remise.`,
-      targetOrder?.assignedAgentName || 'Livreur',
+      `Preuve certifiée [${certCode}] : Commande ${targetOrder.orderNumber} remise avec succès à ${targetOrder.customerName} (${targetOrder.deliveryAddress.city}). Règlement de ${formatXAF(targetOrder.total)} enregistré. Capture photo et signature client cryptées dans le système.`,
+      targetOrder.assignedAgentName || 'Livreur KamerChic',
       'success'
     );
   };
@@ -1067,6 +1494,66 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     addAuditLog('Article Supprimé', 'inventory', `Article ID ${productId} supprimé du catalogue.`, 'Admin', 'warning');
   };
 
+  // Add Customer Review & Star Rating
+  const addProductReview = async (
+    productId: string,
+    reviewData: {
+      authorName: string;
+      city: string;
+      rating: number;
+      comment: string;
+      verifiedBuyer?: boolean;
+    }
+  ): Promise<void> => {
+    const prod = products.find((p) => p.id === productId);
+    if (!prod) return;
+
+    const newReview: ProductReview = {
+      id: `rev-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      authorName: reviewData.authorName.trim(),
+      city: reviewData.city.trim() || 'Cameroun',
+      rating: Math.max(1, Math.min(5, reviewData.rating)),
+      comment: reviewData.comment.trim(),
+      date: new Date().toISOString().slice(0, 10),
+      verifiedBuyer: reviewData.verifiedBuyer ?? true,
+    };
+
+    const updatedReviews = [newReview, ...(prod.reviews || [])];
+    const totalScore = updatedReviews.reduce((sum, r) => sum + r.rating, 0);
+    const updatedRating = Number((totalScore / updatedReviews.length).toFixed(1));
+    const updatedReviewCount = updatedReviews.length;
+
+    const updatedProduct: Product = {
+      ...prod,
+      reviews: updatedReviews,
+      rating: updatedRating,
+      reviewCount: updatedReviewCount,
+    };
+
+    try {
+      await updateDoc(doc(db, 'products', productId), {
+        reviews: updatedReviews,
+        rating: updatedRating,
+        reviewCount: updatedReviewCount,
+      });
+    } catch (err) {
+      console.warn('Firestore add review fallback:', err);
+    }
+
+    setProducts((prev) => prev.map((p) => (p.id === productId ? updatedProduct : p)));
+    if (activeProductDetail && activeProductDetail.id === productId) {
+      setActiveProductDetail(updatedProduct);
+    }
+
+    addAuditLog(
+      'Avis Client Publié',
+      'order',
+      `Nouvel avis (${newReview.rating}★) déposé par ${newReview.authorName} (${newReview.city}) pour ${prod.title.fr}`,
+      newReview.authorName,
+      'success'
+    );
+  };
+
   // Stock Adjustment
   const adjustStock = async (productId: string, variantId: string, delta: number, reason: string) => {
     const prod = products.find((p) => p.id === productId);
@@ -1104,6 +1591,60 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setDeliveryZones((prev) => prev.map((z) => (z.id === id ? { ...z, fee } : z)));
   };
 
+  // Dynamic Delivery Fee Calculation function based on town/location & Firestore shipping_rates
+  const calculateDeliveryFee = (townOrLocation: string, subtotal?: number): number => {
+    if (!townOrLocation) return 1500;
+    const normalized = townOrLocation
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    // Match against dynamic Firestore shipping rates
+    const matched = shippingRates.find((rate) => {
+      const t = rate.town.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return normalized.includes(t) || t.includes(normalized) || rate.id.toLowerCase() === normalized;
+    });
+
+    const effectiveSubtotal = subtotal !== undefined ? subtotal : cartSubtotal;
+
+    if (!matched) {
+      return 3500; // General Cameroon delivery fallback
+    }
+
+    // Free delivery check if threshold met and city is eligible
+    const isFreeEligible = matched.freeShippingEligible ?? (matched.town === 'Yaoundé' || matched.town === 'Douala');
+    const threshold = matched.minOrderForFreeShipping || FREE_SHIPPING_THRESHOLD;
+    if (isFreeEligible && effectiveSubtotal >= threshold) {
+      return 0;
+    }
+
+    return matched.fee;
+  };
+
+  const getShippingRateForTown = (townOrLocation: string): ShippingRate | undefined => {
+    if (!townOrLocation) return undefined;
+    const normalized = townOrLocation
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    return shippingRates.find((rate) => {
+      const t = rate.town.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return normalized.includes(t) || t.includes(normalized) || rate.id.toLowerCase() === normalized;
+    });
+  };
+
+  const updateShippingRate = async (rate: ShippingRate): Promise<void> => {
+    try {
+      await setDoc(doc(db, 'shipping_rates', rate.id), rate);
+    } catch {
+      setShippingRates((prev) => prev.map((r) => (r.id === rate.id ? rate : r)));
+    }
+    addAuditLog('Tarif Livraison Modifié', 'delivery', `Tarif pour ${rate.town} ajusté à ${formatXAF(rate.fee)}`, 'Direction', 'info');
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -1115,6 +1656,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         language,
         t,
         deliveryZones,
+        shippingRates,
+        calculateDeliveryFee,
+        getShippingRateForTown,
+        updateShippingRate,
         coupons,
         appliedCoupon,
         searchQuery,
@@ -1166,6 +1711,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         addProduct,
         updateProduct,
         deleteProduct,
+        addProductReview,
         addCoupon,
         deleteCoupon,
         updateDeliveryZoneFee,
@@ -1181,6 +1727,17 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         deleteExpense,
         adjustStock,
         addAuditLog,
+        // Loyalty & Whitelist VIP
+        loyaltyMembers,
+        whitelist,
+        isLoyaltyModalOpen,
+        setIsLoyaltyModalOpen,
+        lookupLoyaltyMember,
+        addOrUpdateLoyaltyPoints,
+        redeemLoyaltyPoints,
+        checkWhitelist,
+        addWhitelistEntry,
+        deleteWhitelistEntry,
       }}
     >
       {children}
